@@ -1,0 +1,10 @@
+https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css
+https://cdn.jsdelivr.net/npm/is-number@7.0.0/index.js
+https://unpkg.com/is-number@7.0.0/index.js
+https://raw.githubusercontent.com/jonschlinkert/is-number/7.0.0/index.js
+https://esm.sh/is-number@7.0.0
+https://deno.land/std@0.224.0/LICENSE
+https://ga.jspm.io/npm:is-number@7.0.0/index.js
+https://registry.npmjs.org/is-number/7.0.0
+https://httpbin.org/bytes/1024
+https://jsonplaceholder.typicode.com/todos/1
