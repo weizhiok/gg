@@ -29,7 +29,7 @@
 <div class="warning"><strong>⚠️ 使用前必读：</strong>直接打开本页即可；程序会自动把初始页面加载量计入并从本次预算中扣除。请根据当前网络环境限制其他应用的数据权限，完成后按需关闭数据连接。页面初始流量和 HTTP/TLS 开销只能估算，最终扣费以官方账单为准。官方也提示，请确认使用方式符合当前服务条款。</div>
 <section class="url-panel">
 <label class="url-label" for="urlInput">自定义 URL（可选）</label>
-<p class="url-help">默认线路每次打开页面时从仓库中的 url.txt 加载；你可以临时修改或清空当前列表，刷新后会重新加载仓库配置。每次随机访问 3–5 个 URL，剩余流量由本页面的自有填充文件补齐。点击“检测并清理 URL 线路”后，只保留 HTTP 2xx、可打开、允许 CORS、正文非空且不超过 5120 字节的 URL；检测结果只写回当前页面。</p>
+<p class="url-help">默认线路每次打开页面时从仓库中的 url.txt 加载；你可以临时修改或清空当前列表，刷新后会重新加载仓库配置。每次随机访问 3–5 个 URL，剩余流量由本页面的自有填充文件补齐。点击“检测并清理 URL 线路”后，每条线路最多等待 5 秒，并且只保留 HTTP 2xx、可打开、允许 CORS、正文非空且不超过 5120 字节的 URL；检测结果只写回当前页面。</p>
 <textarea id="urlInput" maxlength="20000" spellcheck="false" placeholder="https://example.com/static/probe.txt&#10;https://example.org/1kb.bin"></textarea>
 <div class="url-toolbar"><button class="secondary-button" id="checkButton" type="button">检测并清理 URL 线路</button><button class="secondary-button" id="clearButton" type="button">清空 URL</button></div>
 <div class="url-summary" id="urlSummary"></div><div id="routeSummary" aria-live="polite"></div><div id="routeResults" aria-live="polite"></div>
