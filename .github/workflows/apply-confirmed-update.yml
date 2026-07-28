@@ -1,0 +1,216 @@
+name: Apply confirmed page updates
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-confirmed-update.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch index and README
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          index_path = Path('index.html')
+          text = index_path.read_text(encoding='utf-8')
+
+          def replace_once(old, new, label):
+              global text
+              if old not in text:
+                  raise SystemExit(f'未找到待替换内容：{label}')
+              text = text.replace(old, new, 1)
+
+          replace_once('<title>GG 数据活动工具</title>', '<title>数据活动</title>', '浏览器标题')
+          replace_once('<h1>GG 数据活动</h1>', '<h1>数据活动</h1>', '页面标题')
+          replace_once(
+              '''            <p class="url-help">
+                一行一个 HTTPS URL。填写后每次随机访问 3–5 个；留空时全部使用本页面的自有填充文件。
+                点击“检测并清理 URL 线路”后，只保留 HTTP 2xx、可打开、允许 CORS、正文非空且不超过 5120 字节的 URL。
+                检测建议在 Wi‑Fi 下进行；检测结果会自动写回此列表。
+            </p>''',
+              '''            <p class="url-help">
+                默认线路每次打开页面时从仓库中的 url.txt 加载；你可以临时修改或清空当前列表，刷新后会重新加载仓库配置。
+                每次随机访问 3–5 个 URL，剩余流量由本页面的自有填充文件补齐。
+                点击“检测并清理 URL 线路”后，只保留 HTTP 2xx、可打开、允许 CORS、正文非空且不超过 5120 字节的 URL；检测结果只写回当前页面。
+            </p>''',
+              'URL 说明文字'
+          )
+          replace_once(
+              "            const URL_STORAGE_KEY = 'ggCustomUrlsV1';",
+              "            const DEFAULT_URL_FILE = 'url.txt';",
+              '默认 URL 文件常量'
+          )
+
+          safe_write_block = '''            function safeWrite(key, value) {
+                try {
+                    localStorage.setItem(key, value);
+                } catch (error) {
+                    // 隐私模式或存储被禁用时不影响运行流程。
+                }
+            }
+'''
+          load_block = safe_write_block + '''
+            async function loadDefaultUrls() {
+                consumeButton.disabled = true;
+                checkButton.disabled = true;
+                clearButton.disabled = true;
+                routeSummary.textContent = '正在从 url.txt 加载默认线路…';
+
+                const defaultUrl = new URL(DEFAULT_URL_FILE, location.href);
+                defaultUrl.searchParams.set('_ts', Date.now().toString());
+
+                try {
+                    const response = await fetch(defaultUrl.href, {
+                        method: 'GET',
+                        cache: 'no-store',
+                        credentials: 'same-origin'
+                    });
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    urlInput.value = (await response.text()).trim();
+                    routeSummary.textContent = urlInput.value
+                        ? '已从 url.txt 加载默认线路；当前修改仅在本页面临时有效。'
+                        : 'url.txt 当前为空；运行时将使用页面自身填充文件。';
+                } catch (error) {
+                    urlInput.value = '';
+                    routeSummary.textContent =
+                        `默认线路加载失败（${error.message || '未知错误'}），可手动输入；留空将使用页面自身填充文件。`;
+                } finally {
+                    initialResourceCutoff = performance.now();
+                    updateUrlSummary();
+                    updateBudgetPreview();
+                    renderHistory();
+                    await waitForPageMeasurement();
+                    consumeButton.disabled = false;
+                    checkButton.disabled = false;
+                    clearButton.disabled = false;
+                }
+            }
+'''
+          replace_once(safe_write_block, load_block, '默认线路加载函数插入点')
+
+          text, removed = re.subn(
+              r'^\s*safeWrite\(URL_STORAGE_KEY,.*?\);\n',
+              '',
+              text,
+              flags=re.MULTILINE
+          )
+          if removed != 4:
+              raise SystemExit(f'URL 本地存储语句数量异常：预期 4，实际 {removed}')
+
+          replace_once(
+              '''            urlInput.value = safeRead(URL_STORAGE_KEY, '');
+            initialResourceCutoff = performance.now();
+            updateUrlSummary();
+            updateBudgetPreview();
+            renderHistory();
+            waitForPageMeasurement();''',
+              '''            urlInput.value = '';
+            updateUrlSummary();
+            updateBudgetPreview();
+            renderHistory();
+            loadDefaultUrls();''',
+              '页面初始化逻辑'
+          )
+
+          if 'URL_STORAGE_KEY' in text:
+              raise SystemExit('仍残留 URL_STORAGE_KEY')
+          index_path.write_text(text, encoding='utf-8')
+
+          readme = '''# 数据活动
+
+这是一个完全静态的 GitHub Pages 页面，用于手动发起一次可控的网络数据活动。
+
+## 当前版本功能
+
+- 费用下拉选项：`£0.01`、`£0.02`、`£0.03`，默认 `£0.01`。
+- 每次目标字节数都在所选金额的 `±20%` 范围内随机生成，不能关闭随机化。
+- 页面每次打开或刷新时，都会从仓库根目录的 `url.txt` 读取默认 URL，一行一个。
+- 页面中的 URL 可以临时增加、删除、清空或检测，但不会写回仓库；刷新后会重新加载 `url.txt`。
+- 有 URL 时随机选择 3–5 个 URL 访问，然后用本仓库的 `payload.txt` 补齐剩余字节。
+- URL 输入框为空时，完全使用本仓库的 `payload.txt`，不会访问任何自定义 URL。
+- 直接打开页面时，会读取 Navigation Timing，将初始页面和 `url.txt` 的加载量尽量从本次目标预算中扣除。
+- 最近 20 次使用记录保存在浏览器本地；URL 列表不再保存在浏览器本地。
+- URL 检测使用真实的 CORS `GET` 请求，显示 HTTP 状态、可打开性、CORS、正文大小和失败原因。
+- 点击“检测并清理 URL 线路”后，只保留 2xx、CORS 可读、正文非空且不超过 `5120 B` 的 URL，其余会从当前页面列表中移除。
+
+## 默认 URL 配置
+
+默认线路保存在仓库根目录的 `url.txt` 中，每行一个 URL。永久调整默认线路时，请直接编辑并提交该文件。
+
+页面加载 `url.txt` 时会使用 `cache: no-store` 并附加时间戳参数，以尽量避免浏览器和 CDN 返回旧缓存。GitHub Pages 刚完成提交后仍可能需要短暂时间部署，页面会读取已经部署的最新版本。
+
+网页输入框只是临时工作区：手动修改、清空或线路检测都不会改变 `url.txt`。重新打开或刷新页面后，会再次读取仓库配置。
+
+## 金额与字节校准
+
+当前按照既有测试结果校准：`128,684 B` 作为 `£0.03` 的经验基准，因此采用以下字节预算：
+
+| 名义金额 | 基准字节数 | ±20% 目标范围 |
+|---|---:|---:|
+| £0.01 | 42,895 B | 34,316–51,474 B |
+| £0.02 | 85,790 B | 68,632–102,948 B |
+| £0.03 | 128,684 B | 102,947–154,421 B |
+
+目标总量包含页面初始加载量。程序会另外预留约 4 KB 用于无法从浏览器精确读取的协议开销，因此网页显示的字节数是预算估计，不是账单承诺。
+最终扣费以官方账单为准。官方也提示，请确认使用方式符合当前服务条款。
+
+## URL 输入规则
+
+最简单的格式是一行一个 URL：
+
+```text
+https://example.com/static/probe.txt
+https://example.org/1kb.bin
+```
+
+目标站点必须允许当前 GitHub Pages 来源读取响应。没有 CORS 时，浏览器无法读取响应正文和真实大小，因此检测会自动移除该 URL。
+检测会实际读取正文，按照 `5120 B`（5 KiB）上限判断；`Content-Length` 仅用于提前淘汰，最终仍以实际可读取正文为准。
+旧版本中的 `URL|预计字节数` 写法仍可被识别，但只有通过真实 CORS 和实际大小检测后才会保留，检测后会自动去掉估算标记。
+输入 URL 时不要填写账号、密码或私密链接。线路检测建议在 Wi‑Fi 下进行，每条 URL 最多读取约 5 KiB，实际网络开销还包括响应头、TLS 和其他协议开销。
+
+## 推荐使用流程
+
+1. 在仓库的 `url.txt` 中维护需要长期使用的默认线路。
+2. 打开页面并等待默认线路加载完成。
+3. 选择本次目标金额；需要时可临时编辑或检测当前 URL 列表。
+4. 点击“开始测试”，等待页面显示完成。
+5. 完成后按需关闭数据连接。
+
+页面初始 HTML、`url.txt`、DNS、TLS、HTTP 头以及网络服务商的计费方式都可能影响最终扣费。请把网页显示的金额当作预算，不要当作账单承诺。
+
+## 开源协议
+
+MIT License。原项目文件和署名信息保留在仓库中。
+'''
+          Path('README.md').write_text(readme, encoding='utf-8')
+          PY
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          if git diff --quiet -- index.html README.md; then
+            echo "No changes required"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html README.md
+          git commit -m "Load default URLs and rename project"
+          git push
